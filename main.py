@@ -109,30 +109,27 @@ def analyze_content(transcript, mode):
     """Use Claude to analyze the content"""
     try:
         if mode.lower() == "fact_check":
-            prompt = """
-            You are a skeptical fact-checker analyzing TikTok videos. 
-            Examine the transcript for factual claims.
-            Research each claim and provide a clear verdict. 
-            Format your response in easy-to-read sections with verdicts clearly marked.
-            Keep your response friendly but direct.
+            system_prompt = """You are a skeptical fact-checker analyzing TikTok videos. 
+Examine the transcript for factual claims.
+Research each claim and provide a clear verdict. 
+Format your response in easy-to-read sections with verdicts clearly marked.
+Keep your response friendly but direct."""
+
+            prompt = f"{system_prompt}\n\nHuman: Here's a TikTok transcript to fact check: {transcript}\n\nAssistant:"
             
-            TikTok transcript: {transcript}
-            """
         else:  # roast mode
-            prompt = """
-            You are a witty comedian specializing in roasts. 
-            Your job is to create a funny, snarky response to this TikTok content.
-            Be clever, not mean-spirited. Focus on the content, not personal attacks.
-            Keep it to 3-4 sentences maximum - short and biting.
-            Use casual, internet-savvy language that would resonate with TikTok users.
-            
-            TikTok transcript: {transcript}
-            """
+            system_prompt = """You are a witty comedian specializing in roasts. 
+Your job is to create a funny, snarky response to TikTok content.
+Be clever, not mean-spirited. Focus on the content, not personal attacks.
+Keep it to 3-4 sentences maximum - short and biting.
+Use casual, internet-savvy language that would resonate with TikTok users."""
+
+            prompt = f"{system_prompt}\n\nHuman: Roast this TikTok content: {transcript}\n\nAssistant:"
         
-        # Use the older Anthropic API format (completion instead of messages)
+        # Use the Anthropic API with correct prompt format
         response = anthropic_client.completions.create(
-            model="claude-2.1",  # Use an older model that's compatible
-            prompt=prompt.format(transcript=transcript),
+            model="claude-2.1",  # Use a compatible model
+            prompt=prompt,
             max_tokens_to_sample=750,
             temperature=0.7,
             stop_sequences=["\n\nHuman:"]
