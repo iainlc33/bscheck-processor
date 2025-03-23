@@ -110,13 +110,9 @@ def analyze_content(transcript, mode):
     try:
         if mode.lower() == "fact_check":
             system_prompt = """You are a skeptical fact-checker analyzing TikTok videos. 
-Examine the transcript for factual claims.
-Research each claim and provide a clear verdict. 
+Examine the transcript for factual claims. Research each claim and provide a clear verdict. 
 Format your response in easy-to-read sections with verdicts clearly marked.
 Keep your response friendly but direct."""
-
-            prompt = f"{system_prompt}\n\nHuman: Here's a TikTok transcript to fact check: {transcript}\n\nAssistant:"
-            
         else:  # roast mode
             system_prompt = """You are a witty comedian specializing in roasts. 
 Your job is to create a funny, snarky response to TikTok content.
@@ -124,28 +120,34 @@ Be clever, not mean-spirited. Focus on the content, not personal attacks.
 Keep it to 3-4 sentences maximum - short and biting.
 Use casual, internet-savvy language that would resonate with TikTok users."""
 
-            prompt = f"{system_prompt}\n\nHuman: Roast this TikTok content: {transcript}\n\nAssistant:"
+        try:
+            # Try using the Anthropic API with the claude-3-haiku model
+            response = anthropic_client.messages.create(
+                model="claude-3-haiku-20240307",
+                system=system_prompt,
+                max_tokens=750,
+                messages=[
+                    {"role": "user", "content": f"TikTok transcript: {transcript}"}
+                ]
+            )
+            return response.content[0].text
+        except Exception as e:
+            logger.warning(f"Anthropic API call failed: {str(e)}, falling back to OpenAI")
+            # Fallback to OpenAI if Anthropic fails
+            response = openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"TikTok transcript: {transcript}"}
+                ],
+                max_tokens=200 if mode.lower() == "roast" else 500,
+                temperature=0.7
+            )
+            return response.choices[0].message.content.strip()
         
-        # Use the Anthropic API with correct prompt format
-        response = anthropic_client.completions.create(
-            model="claude-2.1",  # Use a compatible model
-            prompt=prompt,
-            max_tokens_to_sample=750,
-            temperature=0.7,
-            stop_sequences=["\n\nHuman:"]
-        )
-        
-        # Extract response text - field name varies by API version
-        if hasattr(response, 'completion'):
-            return response.completion
-        elif hasattr(response, 'text'):
-            return response.text
-        else:
-            # Fallback if the API response structure is different
-            return str(response)
     except Exception as e:
         logger.error(f"Error analyzing content: {str(e)}")
-        # If Claude is still failing, use a mock response for testing
+        # If both APIs fail, use a mock response for testing
         if "test" in transcript.lower():
             if mode.lower() == "fact_check":
                 return "FACT CHECK RESULT: The claim that drinking lemon water helps you lose 10 pounds in a week is FALSE. While lemon water can be a healthy choice, it does not cause significant weight loss on its own. Weight loss of 10 pounds in one week without exercise would be extreme and potentially dangerous."
