@@ -1,14 +1,13 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 import yt_dlp
 import os
 import subprocess
-import requests
 import openai
 from anthropic import Anthropic
-import boto3
-import uuid
 import logging
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,26 +15,26 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+# Add CORS middleware to allow requests from your website
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For production, replace with your actual domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Configuration
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "your_openai_key")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "your_anthropic_key")
-MAKE_CALLBACK_URL = os.environ.get("MAKE_CALLBACK_URL", "your_make_callback_url")
 
 # Initialize clients
 openai.api_key = OPENAI_API_KEY
-anthropic = Anthropic(api_key=ANTHROPIC_API_KEY, base_url="https://api.anthropic.com")
+anthropic = Anthropic(api_key=ANTHROPIC_API_KEY)
 
 class TikTokRequest(BaseModel):
     url: str
-    mode: str
-    webhook_id: str  # Add this to identify which Make.com webhook execution to callback to
-
-class ProcessingResult(BaseModel):
-    transcript: str
-    response: str
-    url: str
-    mode: str
-    webhook_id: str
+    mode: str = "roast"  # Default to roast if not specified
 
 TEMP_DIR = "/tmp"
 os.makedirs(TEMP_DIR, exist_ok=True)
@@ -43,8 +42,8 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 def extract_tiktok_video(url):
     """Download TikTok video and return the file path"""
     try:
-        # Generate a unique filename
-        file_id = str(uuid.uuid4())
+        # Generate a unique filename using timestamp
+        file_id = str(int(time.time()))
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': f'{TEMP_DIR}/{file_id}.%(ext)s',
@@ -53,8 +52,13 @@ def extract_tiktok_video(url):
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            file_path = f"{TEMP_DIR}/{file_id}.{info['ext']}"
-            return file_path
+            # Get the downloaded file path
+            for entry in os.scandir(TEMP_DIR):
+                if entry.name.startswith(file_id):
+                    return entry.path
+            
+            # Fallback in case we can't find the exact file
+            return f"{TEMP_DIR}/{file_id}.{info.get('ext', 'mp4')}"
     except Exception as e:
         logger.error(f"Error extracting TikTok: {str(e)}")
         raise Exception(f"Failed to extract TikTok video: {str(e)}")
@@ -63,7 +67,7 @@ def extract_audio(video_path):
     """Convert video to audio file and return the file path"""
     try:
         audio_path = f"{video_path}.mp3"
-        command = f"ffmpeg -i {video_path} -q:a 0 -map a {audio_path} -y"
+        command = f"ffmpeg -i '{video_path}' -q:a 0 -map a '{audio_path}' -y"
         subprocess.call(command, shell=True)
         return audio_path
     except Exception as e:
@@ -115,94 +119,71 @@ def analyze_content(transcript, mode):
         logger.error(f"Error analyzing content: {str(e)}")
         raise Exception(f"Failed to analyze content: {str(e)}")
 
-def cleanup_files(file_paths):
-    """Clean up temporary files"""
-    for file_path in file_paths:
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        except Exception as e:
-            logger.error(f"Error cleaning up file {file_path}: {str(e)}")
-
-async def process_tiktok(request: TikTokRequest):
-    """Process a TikTok URL and return analysis"""
-    video_path = None
-    audio_path = None
-    
-    try:
-        # Extract the video
-        video_path = extract_tiktok_video(request.url)
-        
-        # Extract audio
-        audio_path = extract_audio(video_path)
-        
-        # Transcribe audio
-        transcript = transcribe_audio(audio_path)
-        
-        # Analyze content
-        response = analyze_content(transcript, request.mode)
-        
-        # Send results back to Make.com
-        result = ProcessingResult(
-            transcript=transcript,
-            response=response,
-            url=request.url,
-            mode=request.mode,
-            webhook_id=request.webhook_id
-        )
-        
-        # Callback to Make.com with the results
-        callback_response = requests.post(
-            MAKE_CALLBACK_URL,
-            json=result.dict()
-        )
-        
-        if callback_response.status_code != 200:
-            logger.error(f"Failed to send callback: {callback_response.text}")
-            
-        return {"status": "success", "message": "Processing completed"}
-    
-    except Exception as e:
-        logger.error(f"Processing error: {str(e)}")
-        # Attempt to notify Make.com of the failure
-        try:
-            error_result = {
-                "error": str(e),
-                "url": request.url,
-                "mode": request.mode,
-                "webhook_id": request.webhook_id
-            }
-            requests.post(MAKE_CALLBACK_URL, json=error_result)
-        except:
-            pass
-        return {"status": "error", "message": str(e)}
-    
-    finally:
-        # Clean up temporary files
-        files_to_cleanup = [f for f in [video_path, audio_path] if f]
-        cleanup_files(files_to_cleanup)
-
 @app.post("/process")
-async def process_tiktok_endpoint(request: TikTokRequest, background_tasks: BackgroundTasks):
+async def process_tiktok_endpoint(request: TikTokRequest):
     """Endpoint to process a TikTok URL"""
     # Validate the request
     if not request.url or not request.url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL format")
     
-    if not request.mode or request.mode.lower() not in ["fact_check", "roast"]:
-        # Default to roast if not specified correctly
-        request.mode = "roast"
+    video_path = None
+    audio_path = None
     
-    # Process in background to avoid timeouts
-    background_tasks.add_task(process_tiktok, request)
+    try:
+        # Log the beginning of processing
+        logger.info(f"Processing URL: {request.url}, Mode: {request.mode}")
+        
+        # Extract the video
+        logger.info("Extracting video...")
+        video_path = extract_tiktok_video(request.url)
+        logger.info(f"Video extracted to: {video_path}")
+        
+        # Extract audio
+        logger.info("Extracting audio...")
+        audio_path = extract_audio(video_path)
+        logger.info(f"Audio extracted to: {audio_path}")
+        
+        # Transcribe audio
+        logger.info("Transcribing audio...")
+        transcript = transcribe_audio(audio_path)
+        logger.info(f"Transcription: {transcript}")
+        
+        # Analyze content
+        logger.info(f"Analyzing content with mode: {request.mode}")
+        response_text = analyze_content(transcript, request.mode)
+        logger.info("Analysis complete")
+        
+        # Return the response
+        return {
+            "status": "success", 
+            "transcript": transcript, 
+            "response": response_text
+        }
     
-    return {"status": "processing", "message": "Your request is being processed"}
+    except Exception as e:
+        logger.error(f"Processing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        # Clean up files
+        try:
+            if video_path and os.path.exists(video_path):
+                os.remove(video_path)
+            if audio_path and os.path.exists(audio_path):
+                os.remove(audio_path)
+        except Exception as e:
+            logger.error(f"Error cleaning up files: {str(e)}")
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
 
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {"message": "BSCheck TikTok Processing API", "status": "online"}
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
