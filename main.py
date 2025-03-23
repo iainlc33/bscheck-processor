@@ -106,7 +106,7 @@ def transcribe_audio(audio_path):
         raise Exception(f"Failed to transcribe audio: {str(e)}")
 
 def analyze_content(transcript, mode):
-    """Use Claude to analyze the content"""
+    """Use Claude or GPT to analyze the content"""
     try:
         if mode.lower() == "fact_check":
             system_prompt = """You are a skeptical fact-checker analyzing TikTok videos. 
@@ -120,34 +120,21 @@ Be clever, not mean-spirited. Focus on the content, not personal attacks.
 Keep it to 3-4 sentences maximum - short and biting.
 Use casual, internet-savvy language that would resonate with TikTok users."""
 
-        try:
-            # Try using the Anthropic API with the claude-3-haiku model
-            response = anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",
-                system=system_prompt,
-                max_tokens=750,
-                messages=[
-                    {"role": "user", "content": f"TikTok transcript: {transcript}"}
-                ]
-            )
-            return response.content[0].text
-        except Exception as e:
-            logger.warning(f"Anthropic API call failed: {str(e)}, falling back to OpenAI")
-            # Fallback to OpenAI if Anthropic fails
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"TikTok transcript: {transcript}"}
-                ],
-                max_tokens=200 if mode.lower() == "roast" else 500,
-                temperature=0.7
-            )
-            return response.choices[0].message.content.strip()
-        
+        # Use OpenAI as the primary model for simplicity
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"TikTok transcript: {transcript}"}
+            ],
+            max_tokens=200 if mode.lower() == "roast" else 500,
+            temperature=0.7
+        )
+        return response.choices[0].message.content.strip()
+            
     except Exception as e:
         logger.error(f"Error analyzing content: {str(e)}")
-        # If both APIs fail, use a mock response for testing
+        # If API is still failing, use a mock response for testing
         if "test" in transcript.lower():
             if mode.lower() == "fact_check":
                 return "FACT CHECK RESULT: The claim that drinking lemon water helps you lose 10 pounds in a week is FALSE. While lemon water can be a healthy choice, it does not cause significant weight loss on its own. Weight loss of 10 pounds in one week without exercise would be extreme and potentially dangerous."
