@@ -140,20 +140,20 @@ def analyze_content(transcript, mode):
 @app.post("/process")
 async def process_tiktok_endpoint(request: TikTokRequest):
     """Endpoint to process a TikTok URL"""
-    # Validate the request
-    if not request.url or not request.url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="Invalid URL format")
-    
-    # Add a mock/test mode for development
-    if request.url.lower() == "test" or "test" in request.url.lower():
+    # Special case for test mode - check before URL validation
+    if request.url == "test" or request.url == "https://example.com" or "test" in request.url.lower():
         logger.info("Using test mode with mock data")
-        transcript = "This is a test transcript. Pretend this is from a TikTok video about cats dancing."
+        transcript = "This is a test transcript from a TikTok video. In this video, someone is claiming that drinking lemon water every morning will make you lose 10 pounds in a week without exercise. They also say that celebrities use this secret trick all the time but the diet industry doesn't want you to know about it."
         response_text = analyze_content(transcript, request.mode)
         return {
             "status": "success", 
             "transcript": transcript, 
             "response": response_text
         }
+    
+    # Validate the request for non-test URLs
+    if not request.url or not request.url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid URL format")
     
     video_path = None
     audio_path = None
