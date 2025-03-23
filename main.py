@@ -23,7 +23,7 @@ MAKE_CALLBACK_URL = os.environ.get("MAKE_CALLBACK_URL", "your_make_callback_url"
 
 # Initialize clients
 openai.api_key = OPENAI_API_KEY
-anthropic = Anthropic(api_key=ANTHROPIC_API_KEY)
+anthropic = Anthropic(api_key=ANTHROPIC_API_KEY, base_url="https://api.anthropic.com")
 
 class TikTokRequest(BaseModel):
     url: str
