@@ -45,11 +45,16 @@ def extract_tiktok_video(url):
         file_id = str(int(time.time()))
         output_path = f"{TEMP_DIR}/{file_id}.mp4"
         
-        # Format based on apidojo/tiktok-scraper documentation
+        # Format exactly matching the documentation example
         run_input = {
-            "startUrls": [{"url": url}],  # Just pass the full URL as is
-            "maxItems": 1  # We only need one result
+            "startUrls": [
+                url
+            ],
+            "maxItems": 1
         }
+        
+        # Log the exact input being sent for debugging
+        logger.info(f"Sending Apify request with input: {run_input}")
         
         # Make API request to Apify
         run_url = "https://api.apify.com/v2/acts/apidojo~tiktok-scraper/runs"
@@ -60,7 +65,7 @@ def extract_tiktok_video(url):
         }
         
         # Start the scraper run
-        response = requests.post(run_url, headers=headers, json={"runInput": run_input})
+        response = requests.post(run_url, headers=headers, json=run_input)
         
         if response.status_code != 201:
             logger.error(f"Apify run creation failed: {response.text}")
@@ -198,7 +203,7 @@ def extract_tiktok_video(url):
         
     except Exception as e:
         logger.error(f"Error extracting TikTok: {str(e)}")
-        return None
+        raise Exception(f"Failed to extract TikTok video: {str(e)}")
 
 def extract_audio(video_path):
     """Convert video to audio file and return the file path"""
@@ -270,14 +275,7 @@ Use casual, internet-savvy language that would resonate with TikTok users."""
             
     except Exception as e:
         logger.error(f"Error analyzing content: {str(e)}")
-        # If API is still failing, use a mock response for testing
-        if "test" in transcript.lower():
-            if mode.lower() == "fact_check":
-                return "FACT CHECK RESULT: The claim that drinking lemon water helps you lose 10 pounds in a week is FALSE. While lemon water can be a healthy choice, it does not cause significant weight loss on its own. Weight loss of 10 pounds in one week without exercise would be extreme and potentially dangerous."
-            else:
-                return "Oh look, another miracle weight loss trick that doesn't involve diet or exercise! Next they'll be telling us that scrolling through TikTok burns calories. If celebrities really had this secret, they wouldn't be spending millions on personal trainers and chefs."
-        else:
-            raise Exception(f"Failed to analyze content: {str(e)}")
+        raise Exception(f"Failed to analyze content: {str(e)}")
 
 @app.post("/process")
 async def process_tiktok_endpoint(request: TikTokRequest):
@@ -308,31 +306,17 @@ async def process_tiktok_endpoint(request: TikTokRequest):
         logger.info("Extracting video using Apify...")
         video_path = extract_tiktok_video(request.url)
         
-        # If video extraction failed, use mock data
-        if not video_path:
-            logger.info("Video extraction failed, using mock transcript")
-            # Generate a transcript based on the URL
-            if "trump" in request.url.lower() or "political" in request.url.lower():
-                transcript = "Thank you to my incredible supporters. We're going to win this election and make America great again. The other side wants to take away your freedoms, but we're going to fight for you every day. Join us in this movement!"
-            elif "food" in request.url.lower() or "recipe" in request.url.lower() or "cooking" in request.url.lower():
-                transcript = "This simple trick will transform your cooking. Just add a teaspoon of soy sauce to your scrambled eggs before cooking for the most amazing flavor. Trust me, you'll never make eggs the same way again!"
-            elif "health" in request.url.lower() or "fitness" in request.url.lower() or "weight" in request.url.lower():
-                transcript = "I lost 30 pounds in just 2 weeks with this one simple trick. Just drink apple cider vinegar mixed with warm water every morning on an empty stomach and watch the fat melt away. The weight loss industry doesn't want you to know this!"
-            else:
-                # Default fallback transcript
-                transcript = "This is a transcript from a TikTok video. In this video, someone is making surprisingly bold claims without any evidence. They're saying you can achieve amazing results with minimal effort, which sounds too good to be true."
-        else:
-            logger.info(f"Video extracted to: {video_path}")
-            
-            # Extract audio
-            logger.info("Extracting audio...")
-            audio_path = extract_audio(video_path)
-            logger.info(f"Audio extracted to: {audio_path}")
-            
-            # Transcribe audio
-            logger.info("Transcribing audio...")
-            transcript = transcribe_audio(audio_path)
-            logger.info(f"Transcription: {transcript}")
+        logger.info(f"Video extracted to: {video_path}")
+        
+        # Extract audio
+        logger.info("Extracting audio...")
+        audio_path = extract_audio(video_path)
+        logger.info(f"Audio extracted to: {audio_path}")
+        
+        # Transcribe audio
+        logger.info("Transcribing audio...")
+        transcript = transcribe_audio(audio_path)
+        logger.info(f"Transcription: {transcript}")
         
         # Analyze content
         logger.info(f"Analyzing content with mode: {request.mode}")
