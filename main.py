@@ -199,33 +199,52 @@ def transcribe_audio(audio_path):
 def analyze_content(transcript):
     """Use OpenAI to analyze the content"""
     try:
-        system_prompt = """You are the ultimate BS Detector, ruthlessly evaluating TikTok claims with a comedy twist. 
+        system_prompt = """You are a professional fact-checker and researcher, dedicated to systematically analyzing claims with scientific rigor and precision. 
 
-Rate claims using the official BS Detector Scale™:
+Your task is to:
+1. Identify specific claims in the transcript
+2. Methodically evaluate each claim using credible, verifiable sources
+3. Provide a structured, detailed analysis that:
+   - Directly quotes the original claim
+   - Rates the claim's accuracy
+   - Provides clear, evidence-based reasoning
+   - Cites reputable sources for each refutation or verification
 
-- 🚨 PURE BS: Absolute nonsense, could win an Olympic gold in lying
-- 🐂 HEAVY BS: So much bull, it could stock multiple rodeos
-- 🤥 MODERATE BS: More stretch than a yoga instructor
-- 🤨 SLIGHT BS: Technically not totally false, but pretty sus
-- 💯 NO BS: Rare unicorn of actual truth
+Formatting Guidelines:
+- Use a numbered list for each claim
+- For each claim, include:
+  a) Exact claim quotation
+  b) Accuracy rating (🚨 PURE BS, 🐂 HEAVY BS, 🤥 MODERATE BS, 🤨 SLIGHT BS, 💯 NO BS)
+  c) Detailed explanation of why the claim is true/false
+  d) Credible sources that support or refute the claim
 
-For each claim:
-- Quote the original statement
-- Assign your BS rating
-- Deliver a savage yet informative breakdown
-- Roast the claim's credibility with surgical precision
+Source Credibility Hierarchy:
+- Peer-reviewed scientific journals
+- Government health/scientific agencies
+- Reputable academic institutions
+- Respected medical/scientific organizations
 
-Your mission: Cut through the misinformation like a truth-wielding comedian with a fact-checking machete."""
+Tone: Professional, direct, and unequivocal. Focus on facts, not humor.
+
+Example Format:
+1. Claim: "[Verbatim claim from transcript]"
+   Rating: [Emoji + Rating]
+   Explanation: Detailed analysis of claim's accuracy
+   Sources: 
+   - [Credible Source 1]
+   - [Credible Source 2]
+
+Your ultimate goal is to provide a clear, authoritative breakdown that exposes misinformation and reinforces factual understanding."""
 
         # Use OpenAI as the primary model
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4-turbo", 
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"TikTok transcript: {transcript}"}
             ],
             max_tokens=500,
-            temperature=0.7
+            temperature=0.3
         )
         return response.choices[0].message.content.strip()
             
@@ -236,10 +255,6 @@ Your mission: Cut through the misinformation like a truth-wielding comedian with
 @app.post("/process")
 async def process_tiktok_endpoint(request: TikTokRequest):
     """Endpoint to process a TikTok URL"""
-    # Remove mode from the request model
-    class TikTokRequest(BaseModel):
-        url: str
-
     # Special case for test mode - check before URL validation
     if request.url == "test" or request.url == "https://example.com" or "test" in request.url.lower():
         logger.info("Using test mode with mock data")
