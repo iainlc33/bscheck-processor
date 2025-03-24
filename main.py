@@ -222,7 +222,9 @@ Formatting Guidelines:
 
 Source Credibility Requirements:
 - ALWAYS include the full URL for each source (starting with http:// or https://)
-- IMPORTANT: Never break or split URLs across multiple lines - keep each URL on a single line
+- URLs MUST be complete and on a single line - never break a URL across multiple lines
+- If a URL is long, provide the complete URL without truncating it
+- Each source should be on its own line with a single hyphen (-) prefix
 - Prioritize sources from these credible domains:
   * .gov domains (NASA.gov, CDC.gov, NIH.gov, etc.)
   * .edu domains (university websites)
@@ -230,6 +232,12 @@ Source Credibility Requirements:
   * Peer-reviewed journals (Nature.com, Science.org, etc.)
   * Reputable scientific organizations (with verifiable websites)
   * Major medical institutions (MayoClinic.org, etc.)
+
+URL Format Examples:
+- GOOD: - NASA Mars Mission https://www.nasa.gov/mission_pages/mars/main/index.html
+- BAD:  - NASA Mars Mission https://www.nasa.gov/mission
+         _pages/mars/main/index.html
+- BAD:  - NASA Mars Mission (link broken across lines)
 
 Tone: Professional, direct, and unequivocal. Focus on facts, not humor.
 
@@ -241,7 +249,7 @@ Example Format:
    - National Institutes of Health https://www.nih.gov/specific-page
    - Stanford University Research https://stanford.edu/research/example
 
-Your ultimate goal is to provide a clear, authoritative breakdown that exposes misinformation and reinforces factual understanding. ALWAYS include actual URLs that users can visit to verify information."""
+Your ultimate goal is to provide a clear, authoritative breakdown that exposes misinformation and reinforces factual understanding. ALWAYS include actual URLs that users can visit to verify information, and ensure those URLs are complete and on a single line."""
 
         # Use OpenAI as the primary model
         response = openai.chat.completions.create(
