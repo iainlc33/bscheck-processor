@@ -53,8 +53,10 @@ def extract_tiktok_video(url):
             "shouldDownloadVideos": True
         }
         
-        # Make API request to Apify
-        run_url = "https://api.apify.com/v2/acts/apidojo/tiktok-scraper/runs"
+        # Make API request to Apify - FIXED ENDPOINT URL
+        # The correct format is "username~actor-name" with ~ instead of /
+        run_url = "https://api.apify.com/v2/acts/apidojo~tiktok-scraper/runs"
+        
         headers = {
             "Authorization": f"Bearer {APIFY_API_TOKEN}",
             "Content-Type": "application/json"
@@ -113,6 +115,8 @@ def extract_tiktok_video(url):
             video_url = video_item["video"]["downloadAddr"]
         elif "downloadUrl" in video_item:
             video_url = video_item["downloadUrl"]
+        elif "video" in video_item and "playAddr" in video_item["video"]:
+            video_url = video_item["video"]["playAddr"]
         
         if not video_url:
             # Try to find in the Key Store first
@@ -130,14 +134,24 @@ def extract_tiktok_video(url):
                 raise Exception("No video URL found in Apify results")
         
         # Download the video
+        logger.info(f"Downloading video from URL: {video_url}")
         video_response = requests.get(video_url, stream=True)
+        
+        if video_response.status_code != 200:
+            raise Exception(f"Failed to download video: Status code {video_response.status_code}")
+            
         with open(output_path, 'wb') as f:
             for chunk in video_response.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
         
-        return output_path
-    
+        # Verify file was downloaded
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            logger.info(f"Video downloaded successfully to {output_path}")
+            return output_path
+        else:
+            raise Exception("Video file is empty or doesn't exist after download")
+        
     except Exception as e:
         logger.error(f"Error extracting TikTok: {str(e)}")
         return None
@@ -147,7 +161,13 @@ def extract_audio(video_path):
     try:
         audio_path = f"{video_path}.mp3"
         command = f"ffmpeg -i '{video_path}' -q:a 0 -map a '{audio_path}' -y"
-        subprocess.call(command, shell=True)
+        
+        # Execute FFmpeg command and capture output for potential debugging
+        process = subprocess.run(command, shell=True, capture_output=True, text=True)
+        
+        if process.returncode != 0:
+            logger.error(f"FFmpeg error: {process.stderr}")
+            raise Exception(f"FFmpeg failed with return code {process.returncode}")
         
         # Verify the audio file was created successfully
         if os.path.exists(audio_path) and os.path.getsize(audio_path) > 0:
