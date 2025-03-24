@@ -213,10 +213,12 @@ Your task is to:
 Formatting Guidelines:
 - Use a numbered list for each claim
 - For each claim, include:
-  a) Exact claim quotation
-  b) Accuracy rating (🚨 PURE BS, 🐂 HEAVY BS, 🤥 MODERATE BS, 🤨 SLIGHT BS, 💯 NO BS)
-  c) Detailed explanation of why the claim is true/false
-  d) Credible sources that support or refute the claim
+  a) **Claim:** Exact claim quotation
+  b) **Rating:** Accuracy rating (🚨 PURE BS, 🐂 HEAVY BS, 🤥 MODERATE BS, 🤨 SLIGHT BS, 💯 NO BS)
+  c) **Explanation:** Detailed analysis of why the claim is true/false
+  d) **Sources:**
+     - Credible Source 1
+     - Credible Source 2
 
 Source Credibility Hierarchy:
 - Peer-reviewed scientific journals
@@ -227,10 +229,10 @@ Source Credibility Hierarchy:
 Tone: Professional, direct, and unequivocal. Focus on facts, not humor.
 
 Example Format:
-1. Claim: "[Verbatim claim from transcript]"
-   Rating: [Emoji + Rating]
-   Explanation: Detailed analysis of claim's accuracy
-   Sources: 
+1. **Claim:** "[Verbatim claim from transcript]"
+   **Rating:** [Emoji + Rating]
+   **Explanation:** Detailed analysis of claim's accuracy
+   **Sources:** 
    - [Credible Source 1]
    - [Credible Source 2]
 
@@ -243,7 +245,7 @@ Your ultimate goal is to provide a clear, authoritative breakdown that exposes m
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"TikTok transcript: {transcript}"}
             ],
-            max_tokens=500,
+            max_tokens=1000,  # Increased from 500 to 1000
             temperature=0.3
         )
         return response.choices[0].message.content.strip()
