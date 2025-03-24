@@ -222,6 +222,7 @@ Formatting Guidelines:
 
 Source Credibility Requirements:
 - ALWAYS include the full URL for each source (starting with http:// or https://)
+- IMPORTANT: Never break or split URLs across multiple lines - keep each URL on a single line
 - Prioritize sources from these credible domains:
   * .gov domains (NASA.gov, CDC.gov, NIH.gov, etc.)
   * .edu domains (university websites)
