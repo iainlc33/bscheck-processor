@@ -39,9 +39,166 @@ TEMP_DIR = "/tmp"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 def extract_tiktok_video(url):
-    """Simple placeholder that relies on fallback system"""
-    logger.info(f"Using fallback system for URL: {url}")
-    return None
+    """Download TikTok video using apidojo/tiktok-scraper"""
+    try:
+        logger.info(f"Trying to download video from {url}")
+        file_id = str(int(time.time()))
+        output_path = f"{TEMP_DIR}/{file_id}.mp4"
+        
+        # Format based on apidojo/tiktok-scraper documentation
+        run_input = {
+            "startUrls": [{"url": url}],  # Just pass the full URL as is
+            "maxItems": 1  # We only need one result
+        }
+        
+        # Make API request to Apify
+        run_url = "https://api.apify.com/v2/acts/apidojo~tiktok-scraper/runs"
+        
+        headers = {
+            "Authorization": f"Bearer {APIFY_API_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        # Start the scraper run
+        response = requests.post(run_url, headers=headers, json={"runInput": run_input})
+        
+        if response.status_code != 201:
+            logger.error(f"Apify run creation failed: {response.text}")
+            raise Exception(f"Failed to start Apify scraper: {response.status_code}")
+        
+        run_data = response.json()
+        run_id = run_data["data"]["id"]
+        
+        # Log the run URL for manual checking
+        logger.info(f"Apify run created: https://console.apify.com/view/runs/{run_id}")
+        
+        # Wait for the run to finish
+        run_status_url = f"https://api.apify.com/v2/actor-runs/{run_id}"
+        
+        # Poll for completion (with timeout)
+        start_time = time.time()
+        timeout = 90  # seconds - increased timeout for TikTok scraping
+        
+        while time.time() - start_time < timeout:
+            status_response = requests.get(run_status_url, headers={"Authorization": f"Bearer {APIFY_API_TOKEN}"})
+            status_data = status_response.json()
+            
+            status = status_data["data"]["status"]
+            logger.info(f"Apify run status: {status}")
+            
+            if status == "SUCCEEDED":
+                break
+                
+            if status in ["FAILED", "ABORTED", "TIMED-OUT"]:
+                status_message = status_data["data"].get("statusMessage", "No status message")
+                logger.error(f"Apify run failed. Status: {status}, Message: {status_message}")
+                logger.error(f"Apify run details: {status_data}")
+                raise Exception(f"Apify run failed with status: {status}")
+                
+            # Wait before checking again
+            time.sleep(5)
+        
+        # Check if timeout occurred
+        if time.time() - start_time >= timeout:
+            logger.error("Apify run timed out")
+            raise Exception("Apify run timed out")
+        
+        # Get the results from the dataset
+        dataset_id = status_data["data"]["defaultDatasetId"]
+        dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items"
+        
+        results_response = requests.get(dataset_url, headers={"Authorization": f"Bearer {APIFY_API_TOKEN}"})
+        results = results_response.json()
+        
+        if not results or len(results) == 0:
+            raise Exception("No results found from Apify scraper")
+        
+        # Log the result structure to help debugging
+        logger.info(f"Apify returned {len(results)} results")
+        logger.info(f"First result keys: {list(results[0].keys())}")
+        
+        # Find the video URL
+        video_item = results[0]
+        video_url = None
+        
+        # Check all possible locations for the video URL
+        potential_paths = [
+            # Direct paths
+            ["videoUrl"],
+            ["downloadUrl"],
+            ["video", "downloadAddr"],
+            ["video", "playAddr"],
+            ["url"],
+            ["downloadMp4"],
+            ["videoMp4"],
+            # Add any other potential paths
+        ]
+        
+        for path in potential_paths:
+            current = video_item
+            found = True
+            
+            for key in path:
+                if key in current:
+                    current = current[key]
+                else:
+                    found = False
+                    break
+                    
+            if found and isinstance(current, str):
+                video_url = current
+                logger.info(f"Found video URL at path: {path}")
+                break
+        
+        if not video_url:
+            # Try to find video data in the Key Store
+            key_value_store_id = status_data["data"]["defaultKeyValueStoreId"]
+            store_url = f"https://api.apify.com/v2/key-value-stores/{key_value_store_id}/records/OUTPUT"
+            
+            store_response = requests.get(store_url, headers={"Authorization": f"Bearer {APIFY_API_TOKEN}"})
+            
+            if store_response.status_code == 200:
+                try:
+                    store_data = store_response.json()
+                    logger.info(f"Key store data keys: {list(store_data.keys())}")
+                    
+                    # Try to find video URL in any field that might contain it
+                    for key, value in store_data.items():
+                        if isinstance(value, str) and (value.startswith("http") and 
+                                                        (".mp4" in value or "video" in value)):
+                            video_url = value
+                            logger.info(f"Found video URL in key store under key: {key}")
+                            break
+                except:
+                    logger.error("Failed to parse key store data as JSON")
+        
+        if not video_url:
+            # Log the full response to help debug the structure
+            logger.error(f"Could not find video URL in response. First result: {results[0]}")
+            raise Exception("No video URL found in Apify results")
+        
+        # Download the video
+        logger.info(f"Downloading video from URL: {video_url}")
+        video_response = requests.get(video_url, stream=True)
+        
+        if video_response.status_code != 200:
+            raise Exception(f"Failed to download video: Status code {video_response.status_code}")
+            
+        with open(output_path, 'wb') as f:
+            for chunk in video_response.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+        
+        # Verify file was downloaded
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            logger.info(f"Video downloaded successfully to {output_path}")
+            return output_path
+        else:
+            raise Exception("Video file is empty or doesn't exist after download")
+        
+    except Exception as e:
+        logger.error(f"Error extracting TikTok: {str(e)}")
+        return None
 
 def extract_audio(video_path):
     """Convert video to audio file and return the file path"""
@@ -147,8 +304,8 @@ async def process_tiktok_endpoint(request: TikTokRequest):
         # Log the beginning of processing
         logger.info(f"Processing URL: {request.url}, Mode: {request.mode}")
         
-        # Extract the video (will return None and use fallback)
-        logger.info("Extracting video...")
+        # Extract the video
+        logger.info("Extracting video using Apify...")
         video_path = extract_tiktok_video(request.url)
         
         # If video extraction failed, use mock data
