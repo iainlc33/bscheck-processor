@@ -34,7 +34,6 @@ openai.api_key = OPENAI_API_KEY
 
 class TikTokRequest(BaseModel):
     url: str
-    mode: str = "roast"  # Default to roast if not specified
 
 TEMP_DIR = "/tmp"
 os.makedirs(TEMP_DIR, exist_ok=True)
@@ -197,11 +196,10 @@ def transcribe_audio(audio_path):
         logger.error(f"Error transcribing audio: {str(e)}")
         raise Exception(f"Failed to transcribe audio: {str(e)}")
 
-def analyze_content(transcript, mode):
+def analyze_content(transcript):
     """Use OpenAI to analyze the content"""
     try:
-        if mode.lower() == "fact_check":
-            system_prompt = """You are the ultimate BS Detector, ruthlessly evaluating TikTok claims with a comedy twist. 
+        system_prompt = """You are the ultimate BS Detector, ruthlessly evaluating TikTok claims with a comedy twist. 
 
 Rate claims using the official BS Detector Scale™:
 
@@ -218,12 +216,6 @@ For each claim:
 - Roast the claim's credibility with surgical precision
 
 Your mission: Cut through the misinformation like a truth-wielding comedian with a fact-checking machete."""
-        else:  # roast mode
-            system_prompt = """You are a witty comedian specializing in roasts. 
-Your job is to create a funny, snarky response to TikTok content.
-Be clever, not mean-spirited. Focus on the content, not personal attacks.
-Keep it to 3-4 sentences maximum - short and biting.
-Use casual, internet-savvy language that would resonate with TikTok users."""
 
         # Use OpenAI as the primary model
         response = openai.chat.completions.create(
@@ -232,7 +224,7 @@ Use casual, internet-savvy language that would resonate with TikTok users."""
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"TikTok transcript: {transcript}"}
             ],
-            max_tokens=200 if mode.lower() == "roast" else 500,
+            max_tokens=500,
             temperature=0.7
         )
         return response.choices[0].message.content.strip()
@@ -244,11 +236,15 @@ Use casual, internet-savvy language that would resonate with TikTok users."""
 @app.post("/process")
 async def process_tiktok_endpoint(request: TikTokRequest):
     """Endpoint to process a TikTok URL"""
+    # Remove mode from the request model
+    class TikTokRequest(BaseModel):
+        url: str
+
     # Special case for test mode - check before URL validation
     if request.url == "test" or request.url == "https://example.com" or "test" in request.url.lower():
         logger.info("Using test mode with mock data")
         transcript = "This is a test transcript from a TikTok video. In this video, someone is claiming that drinking lemon water every morning will make you lose 10 pounds in a week without exercise. They also say that celebrities use this secret trick all the time but the diet industry doesn't want you to know about it."
-        response_text = analyze_content(transcript, request.mode)
+        response_text = analyze_content(transcript)
         return {
             "status": "success", 
             "transcript": transcript, 
@@ -264,7 +260,7 @@ async def process_tiktok_endpoint(request: TikTokRequest):
     
     try:
         # Log the beginning of processing
-        logger.info(f"Processing URL: {request.url}, Mode: {request.mode}")
+        logger.info(f"Processing URL: {request.url}")
         
         # Extract the video
         logger.info("Extracting video using Apify...")
@@ -283,8 +279,8 @@ async def process_tiktok_endpoint(request: TikTokRequest):
         logger.info(f"Transcription: {transcript}")
         
         # Analyze content
-        logger.info(f"Analyzing content with mode: {request.mode}")
-        response_text = analyze_content(transcript, request.mode)
+        logger.info("Analyzing content...")
+        response_text = analyze_content(transcript)
         logger.info("Analysis complete")
         
         # Return the response
