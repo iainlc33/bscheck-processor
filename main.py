@@ -9,7 +9,8 @@ import logging
 import time
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Create the FastAPI application
@@ -47,9 +48,7 @@ def extract_tiktok_video(url):
         
         # Format exactly matching the documentation example
         run_input = {
-            "startUrls": [
-                url
-            ],
+            "startUrls": [url],
             "maxItems": 1
         }
         
@@ -122,64 +121,16 @@ def extract_tiktok_video(url):
         logger.info(f"Apify returned {len(results)} results")
         logger.info(f"First result keys: {list(results[0].keys())}")
         
-        # Find the video URL
+        # Directly extract video URL from the expected location
         video_item = results[0]
         video_url = None
         
-        # Check all possible locations for the video URL
-        potential_paths = [
-            # Direct paths
-            ["videoUrl"],
-            ["downloadUrl"],
-            ["video", "downloadAddr"],
-            ["video", "playAddr"],
-            ["url"],
-            ["downloadMp4"],
-            ["videoMp4"],
-            # Add any other potential paths
-        ]
-        
-        for path in potential_paths:
-            current = video_item
-            found = True
-            
-            for key in path:
-                if key in current:
-                    current = current[key]
-                else:
-                    found = False
-                    break
-                    
-            if found and isinstance(current, str):
-                video_url = current
-                logger.info(f"Found video URL at path: {path}")
-                break
-        
-        if not video_url:
-            # Try to find video data in the Key Store
-            key_value_store_id = status_data["data"]["defaultKeyValueStoreId"]
-            store_url = f"https://api.apify.com/v2/key-value-stores/{key_value_store_id}/records/OUTPUT"
-            
-            store_response = requests.get(store_url, headers={"Authorization": f"Bearer {APIFY_API_TOKEN}"})
-            
-            if store_response.status_code == 200:
-                try:
-                    store_data = store_response.json()
-                    logger.info(f"Key store data keys: {list(store_data.keys())}")
-                    
-                    # Try to find video URL in any field that might contain it
-                    for key, value in store_data.items():
-                        if isinstance(value, str) and (value.startswith("http") and 
-                                                        (".mp4" in value or "video" in value)):
-                            video_url = value
-                            logger.info(f"Found video URL in key store under key: {key}")
-                            break
-                except:
-                    logger.error("Failed to parse key store data as JSON")
-        
-        if not video_url:
-            # Log the full response to help debug the structure
-            logger.error(f"Could not find video URL in response. First result: {results[0]}")
+        if 'video' in video_item and 'url' in video_item['video']:
+            video_url = video_item['video']['url']
+            logger.info(f"Found video URL: {video_url}")
+        else:
+            logger.error("Could not find video URL in expected location")
+            logger.error(f"Full first result: {video_item}")
             raise Exception("No video URL found in Apify results")
         
         # Download the video
