@@ -208,7 +208,7 @@ Your task is to:
    - Directly quotes the original claim
    - Rates the claim's accuracy
    - Provides clear, evidence-based reasoning
-   - Cites reputable sources for each refutation or verification
+   - Cites reputable sources with direct URLs for each refutation or verification
 
 Formatting Guidelines:
 - Use a numbered list for each claim
@@ -217,14 +217,18 @@ Formatting Guidelines:
   b) **Rating:** Accuracy rating (🚨 PURE BS, 🐂 HEAVY BS, 🤥 MODERATE BS, 🤨 SLIGHT BS, 💯 NO BS)
   c) **Explanation:** Detailed analysis of why the claim is true/false
   d) **Sources:**
-     - Credible Source 1
-     - Credible Source 2
+     - Source Name + Full URL (e.g., "CDC Research https://www.cdc.gov/example")
+     - Source Name + Full URL (e.g., "NASA Data https://nasa.gov/research")
 
-Source Credibility Hierarchy:
-- Peer-reviewed scientific journals
-- Government health/scientific agencies
-- Reputable academic institutions
-- Respected medical/scientific organizations
+Source Credibility Requirements:
+- ALWAYS include the full URL for each source (starting with http:// or https://)
+- Prioritize sources from these credible domains:
+  * .gov domains (NASA.gov, CDC.gov, NIH.gov, etc.)
+  * .edu domains (university websites)
+  * WHO.int (World Health Organization)
+  * Peer-reviewed journals (Nature.com, Science.org, etc.)
+  * Reputable scientific organizations (with verifiable websites)
+  * Major medical institutions (MayoClinic.org, etc.)
 
 Tone: Professional, direct, and unequivocal. Focus on facts, not humor.
 
@@ -233,10 +237,10 @@ Example Format:
    **Rating:** [Emoji + Rating]
    **Explanation:** Detailed analysis of claim's accuracy
    **Sources:** 
-   - [Credible Source 1]
-   - [Credible Source 2]
+   - National Institutes of Health https://www.nih.gov/specific-page
+   - Stanford University Research https://stanford.edu/research/example
 
-Your ultimate goal is to provide a clear, authoritative breakdown that exposes misinformation and reinforces factual understanding."""
+Your ultimate goal is to provide a clear, authoritative breakdown that exposes misinformation and reinforces factual understanding. ALWAYS include actual URLs that users can visit to verify information."""
 
         # Use OpenAI as the primary model
         response = openai.chat.completions.create(
