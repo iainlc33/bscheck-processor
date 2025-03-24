@@ -45,12 +45,15 @@ def extract_tiktok_video(url):
         file_id = str(int(time.time()))
         output_path = f"{TEMP_DIR}/{file_id}.mp4"
         
-        # Start the apidojo/tiktok-scraper actor run
+        # Start the apidojo/tiktok-scraper actor run with corrected input format
         run_input = {
-            "type": "video",
-            "url": url,
-            "maxItems": 1,
-            "shouldDownloadVideos": True
+            "startUrls": [{"url": url}],  # This is the correct format
+            "resultsPerPage": 1,
+            "scrapeType": "videos",
+            "shouldDownloadVideos": True,
+            "proxy": {
+                "useApifyProxy": True
+            }
         }
         
         # Make API request to Apify - FIXED ENDPOINT URL
@@ -87,6 +90,8 @@ def extract_tiktok_video(url):
                 break
                 
             if status_data["data"]["status"] in ["FAILED", "ABORTED", "TIMED-OUT"]:
+                logger.error(f"Apify run failed with status: {status_data['data']['status']}")
+                logger.error(f"Apify run details: {status_data}")
                 raise Exception(f"Apify run failed with status: {status_data['data']['status']}")
                 
             # Wait before checking again
@@ -101,6 +106,8 @@ def extract_tiktok_video(url):
         
         if not results or len(results) == 0:
             raise Exception("No results found from Apify scraper")
+        
+        logger.info(f"Apify result structure: {results[0].keys()}")
         
         # Find the video URL (may be in different location based on this specific actor)
         video_item = results[0]
@@ -131,6 +138,8 @@ def extract_tiktok_video(url):
                     video_url = store_data["videoUrl"]
             
             if not video_url:
+                # Log the full response to help debug the structure
+                logger.error(f"Could not find video URL in response. Response structure: {results[0]}")
                 raise Exception("No video URL found in Apify results")
         
         # Download the video
